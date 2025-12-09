@@ -1,8 +1,9 @@
-# app.py — QUIZ4D GUARDIAN BOT V3.0 FINAL (WEBHOOK MODE — 100% WORK DI RENDER)
+# app.py — QUIZ4D GUARDIAN BOT V3.0 FINAL — WEBHOOK ONLY — RENDER 100% WORK
 
 import os
 import random
 import logging
+import time
 from flask import Flask, request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
@@ -14,10 +15,7 @@ from telegram.ext import (
     filters,
 )
 
-# Logging
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
-)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ==== GANTI INI DOANG ====
@@ -26,10 +24,10 @@ YOUR_USER_ID = 6650330646
 GROUP_CHAT_ID = -1003341246115
 # =========================
 
-application = ApplicationBuilder().token(TOKEN).build()
 app = Flask(__name__)
+application = ApplicationBuilder().token(TOKEN).build()
 
-# Inisialisasi data bot + Job Queue
+# ==================== INIT DATA & RTP ====================
 def init(context: ContextTypes.DEFAULT_TYPE):
     d = context.bot_data
     d.setdefault("messages", [])
@@ -40,7 +38,6 @@ def init(context: ContextTypes.DEFAULT_TYPE):
     d.setdefault("index", 0)
     d.setdefault("user_ids", set())
 
-    # Konten utama
     d.setdefault("bonus_text", "<b>BONUS HARIAN QUIZ4D</b>\n\n• Bonus New Member 100%\n• Bonus Deposit 20%\n• Cashback Slot 10%\n• Min Depo 10K\n\nKlik tombol di bawah!")
     d.setdefault("bonus_url", "https://quiz4d.com/register")
     d.setdefault("daftar_photo", None)
@@ -50,14 +47,12 @@ def init(context: ContextTypes.DEFAULT_TYPE):
     d.setdefault("link_caption", "Link Resmi Quiz4D\nhttps://quiz4d.com/register\n100% Aman & Terpercaya")
     d.setdefault("link_url", "https://quiz4d.com/register")
 
-    # Promo
     d.setdefault("promo_text", "<b>PROMO & EVENT TERBARU</b>")
     d.setdefault("promo_button1_text", "Bonus New Member")
     d.setdefault("promo_button1_url", "https://quiz4d.com/promosi")
     d.setdefault("promo_button2_text", "Event Turnamen")
     d.setdefault("promo_button2_url", "https://quiz4d.com/event")
 
-    # RTP Games
     d.setdefault("rtp_games", [
         "Gates of Olympus", "Sweet Bonanza", "Starlight Princess", "Mahjong Ways 2", "Wild West Gold",
         "Aztec Gems", "Pyramid Bonanza", "Great Rhino Megaways", "Joker's Jewels", "Fire Strike",
@@ -70,7 +65,6 @@ def init(context: ContextTypes.DEFAULT_TYPE):
     ])
     d.setdefault("rtp_data", {})
 
-    # Auto update RTP tiap 40 menit
     if "rtp_job" not in d:
         job = context.job_queue.run_repeating(regenerate_rtp, interval=2400, first=15)
         d["rtp_job"] = job
@@ -86,8 +80,7 @@ async def start_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != YOUR_USER_ID: return
     init(context)
     if context.bot_data.get("running"):
-        await update.message.reply_text("Auto-post sudah jalan!")
-        return
+        return await update.message.reply_text("Auto-post sudah jalan!")
     context.bot_data["running"] = True
     job = context.job_queue.run_repeating(auto_post, interval=context.bot_data["interval"], first=10)
     context.bot_data["job"] = job
@@ -121,8 +114,7 @@ async def add_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.caption or " ".join(context.args)
     photo = update.message.photo[-1].file_id if update.message.photo else None
     if not text and not photo:
-        await update.message.reply_text("Kirim teks atau foto!")
-        return
+        return await update.message.reply_text("Kirim teks atau foto!")
     context.bot_data["messages"].append({"text": text, "photo": photo})
     await update.message.reply_text(f"Pesan ditambah! Total: {len(context.bot_data['messages'])}")
 
@@ -141,8 +133,7 @@ async def set_interval(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def set_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != YOUR_USER_ID: return
     if not context.args:
-        await update.message.reply_text("Contoh: /set_welcome Halo {name}!")
-        return
+        return await update.message.reply_text("Contoh: /set_welcome Halo {name}!")
     text = " ".join(context.args)
     context.bot_data["welcome"] = text
     await update.message.reply_text(f"Welcome diganti!\nPreview: {text.replace('{name}', 'Bro')}")
@@ -153,24 +144,21 @@ async def welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = context.bot_data["welcome"].format(name=member.first_name)
         await update.message.reply_text(msg)
 
-# ==================== FOTO FIX ====================
+# ==================== FOTO & RTP CONTROL ====================
 async def set_daftar_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != YOUR_USER_ID: return
     if not update.message.photo:
-        await update.message.reply_text("Kirim foto dengan caption: /set_daftar_photo")
-        return
+        return await update.message.reply_text("Kirim foto dengan caption: /set_daftar_photo")
     context.bot_data["daftar_photo"] = update.message.photo[-1].file_id
     await update.message.reply_text("Foto daftar berhasil diganti! (Permanen)")
 
 async def set_link_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != YOUR_USER_ID: return
     if not update.message.photo:
-        await update.message.reply_text("Kirim foto dengan caption: /set_link_photo")
-        return
+        return await update.message.reply_text("Kirim foto dengan caption: /set_link_photo")
     context.bot_data["link_photo"] = update.message.photo[-1].file_id
     await update.message.reply_text("Foto link berhasil diganti! (Permanen)")
 
-# ==================== RTP CONTROL ====================
 async def rtp_games(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != YOUR_USER_ID: return
     init(context)
@@ -183,9 +171,7 @@ async def rtp_games(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def remove_rtp_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != YOUR_USER_ID: return
-    if not context.args:
-        await update.message.reply_text("Gunakan: /remove_rtp_game <nama game>")
-        return
+    if not context.args: return await update.message.reply_text("Gunakan: /remove_rtp_game <nama game>")
     game_name = " ".join(context.args).strip()
     init(context)
     if game_name in context.bot_data["rtp_games"]:
@@ -196,9 +182,7 @@ async def remove_rtp_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def add_rtp_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != YOUR_USER_ID: return
-    if not context.args:
-        await update.message.reply_text("Gunakan: /add_rtp_game <nama game>")
-        return
+    if not context.args: return await update.message.reply_text("Gunakan: /add_rtp_game <nama game>")
     game_name = " ".join(context.args).strip()
     init(context)
     if game_name not in context.bot_data["rtp_games"]:
@@ -288,9 +272,7 @@ async def anti_spam(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != YOUR_USER_ID: return
-    if not context.args:
-        await update.message.reply_text("Gunakan: /broadcast pesan kamu")
-        return
+    if not context.args: return await update.message.reply_text("Gunakan: /broadcast pesan kamu")
     text = " ".join(context.args)
     init(context)
     sent = 0
@@ -309,62 +291,56 @@ async def collect_user_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ==================== EDIT COMMANDS ====================
 async def set_bonus_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != YOUR_USER_ID: return
-    if not context.args: await update.message.reply_text("Gunakan: /set_bonus_text teks baru"); return
+    if not context.args: return await update.message.reply_text("Gunakan: /set_bonus_text teks baru")
     context.bot_data["bonus_text"] = " ".join(context.args)
     await update.message.reply_text("Teks bonus diupdate!")
 
 async def set_bonus_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != YOUR_USER_ID: return
-    if not context.args: await update.message.reply_text("Gunakan: /set_bonus_url https://..."); return
+    if not context.args: return await update.message.reply_text("Gunakan: /set_bonus_url https://...")
     context.bot_data["bonus_url"] = context.args[0]
     await update.message.reply_text("URL bonus diupdate!")
 
 async def set_daftar_caption(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != YOUR_USER_ID: return
-    if not context.args: await update.message.reply_text("Gunakan: /set_daftar_caption caption baru"); return
+    if not context.args: return await update.message.reply_text("Gunakan: /set_daftar_caption caption baru")
     context.bot_data["daftar_caption"] = " ".join(context.args)
     await update.message.reply_text("Caption daftar diupdate!")
 
 async def set_daftar_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != YOUR_USER_ID: return
-    if not context.args: await update.message.reply_text("Gunakan: /set_daftar_url https://..."); return
+    if not context.args: return await update.message.reply_text("Gunakan: /set_daftar_url https://...")
     context.bot_data["daftar_url"] = context.args[0]
     await update.message.reply_text("URL daftar diupdate!")
 
 async def set_link_caption(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != YOUR_USER_ID: return
-    if not context.args: await update.message.reply_text("Gunakan: /set_link_caption caption baru"); return
+    if not context.args: return await update.message.reply_text("Gunakan: /set_link_caption caption baru")
     context.bot_data["link_caption"] = " ".join(context.args)
     await update.message.reply_text("Caption link diupdate!")
 
 async def set_link_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != YOUR_USER_ID: return
-    if not context.args: await update.message.reply_text("Gunakan: /set_link_url https://..."); return
+    if not context.args: return await update.message.reply_text("Gunakan: /set_link_url https://...")
     context.bot_data["link_url"] = context.args[0]
     await update.message.reply_text("URL link diupdate!")
 
 async def set_promo_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != YOUR_USER_ID: return
-    if not context.args:
-        await update.message.reply_text("Gunakan: /set_promo_text <teks baru>")
-        return
+    if not context.args: return await update.message.reply_text("Gunakan: /set_promo_text <teks baru>")
     context.bot_data["promo_text"] = " ".join(context.args)
     await update.message.reply_text("Teks promo berhasil diupdate!")
 
 async def set_promo_button1(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != YOUR_USER_ID: return
-    if len(context.args) < 2:
-        await update.message.reply_text("Gunakan: /set_promo_button1 <nama tombol> <link>")
-        return
+    if len(context.args) < 2: return await update.message.reply_text("Gunakan: /set_promo_button1 <nama tombol> <link>")
     context.bot_data["promo_button1_text"] = context.args[0]
     context.bot_data["promo_button1_url"] = context.args[1]
     await update.message.reply_text(f"Button 1 diupdate: {context.args[0]}")
 
 async def set_promo_button2(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != YOUR_USER_ID: return
-    if len(context.args) < 2:
-        await update.message.reply_text("Gunakan: /set_promo_button2 <nama tombol> <link>")
-        return
+    if len(context.args) < 2: return await update.message.reply_text("Gunakan: /set_promo_button2 <nama tombol> <link>")
     context.bot_data["promo_button2_text"] = context.args[0]
     context.bot_data["promo_button2_url"] = context.args[1]
     await update.message.reply_text(f"Button 2 diupdate: {context.args[0]}")
@@ -428,7 +404,6 @@ application.add_handler(CommandHandler("add_rtp_game", add_rtp_game))
 application.add_handler(CommandHandler("remove_rtp_game", remove_rtp_game))
 application.add_handler(CommandHandler("rtp_games", rtp_games))
 
-# Edit commands
 application.add_handler(CommandHandler("set_bonus_text", set_bonus_text))
 application.add_handler(CommandHandler("set_bonus_url", set_bonus_url))
 application.add_handler(CommandHandler("set_daftar_caption", set_daftar_caption))
@@ -439,11 +414,9 @@ application.add_handler(CommandHandler("set_promo_text", set_promo_text))
 application.add_handler(CommandHandler("set_promo_button1", set_promo_button1))
 application.add_handler(CommandHandler("set_promo_button2", set_promo_button2))
 
-# Foto commands
 application.add_handler(MessageHandler(filters.PHOTO & filters.Caption(["/set_daftar_photo"]), set_daftar_photo))
 application.add_handler(MessageHandler(filters.PHOTO & filters.Caption(["/set_link_photo"]), set_link_photo))
 
-# Member commands
 application.add_handler(CommandHandler("bonus", bonus))
 application.add_handler(CommandHandler("daftar", daftar))
 application.add_handler(CommandHandler("jackpot", jackpot))
@@ -454,13 +427,12 @@ application.add_handler(CommandHandler("stats", stats))
 application.add_handler(CommandHandler("rtp", rtp))
 application.add_handler(CommandHandler("promo", promo))
 
-# System
 application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome))
 application.add_handler(MessageHandler(filters.PHOTO & ~filters.COMMAND & ~filters.Caption(["/set_daftar_photo", "/set_link_photo"]), add_message))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, anti_spam))
 application.add_handler(MessageHandler(filters.ALL & filters.ChatType.PRIVATE, collect_user_id))
 
-# ==================== WEBHOOK & RUN ====================
+# ==================== WEBHOOK ENDPOINT ====================
 @app.route("/webhook", methods=["POST"])
 def webhook():
     if request.method == "POST":
@@ -468,21 +440,18 @@ def webhook():
         application.process_update(update)
     return "OK", 200
 
-if __name__ == "__main__":
-    # Untuk testing lokal
-    print("Quiz4D Guardian Bot V3.0 — Mode Lokal (Polling)")
-    application.run_polling(drop_pending_updates=True)
-else:
-    # Production di Render → Webhook Mode
-    import time
-    time.sleep(2)
+# ==================== RUN — WEBHOOK ONLY (NO POLLING) ====================
+if __name__ != "__main__":
+    time.sleep(3)
     APP_URL = f"https://{os.environ['RENDER_EXTERNAL_HOSTNAME']}.onrender.com/webhook"
-    print(f"Setting webhook: {APP_URL}")
+    print(f"QUIZ4D BOT V3.0 STARTED — Setting webhook: {APP_URL}")
     application.bot.set_webhook(url=APP_URL, drop_pending_updates=True)
-
     application.run_webhook(
         listen="0.0.0.0",
         port=int(os.environ.get("PORT", 10000)),
         url_path="/webhook",
         webhook_url=APP_URL
     )
+else:
+    print("Local testing mode — gunakan Render untuk production!")
+    application.run_polling(drop_pending_updates=True)
