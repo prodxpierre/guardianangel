@@ -1,4 +1,4 @@
-# app.py — QUIZ4D GUARDIAN BOT V3.0 FINAL — RENDER 100% STABIL (WEBHOOK + DYNAMIC OWNER + PROMO FOTO)
+# app.py — QUIZ4D GUARDIAN BOT V3.0 FINAL — RENDER 100% STABIL (WEBHOOK + DYNAMIC OWNER + PROMO FOTO + /help PINTAR)
 
 import os
 import random
@@ -80,7 +80,7 @@ async def remove_owner(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def list_owner(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_owner(update.effective_user.id):
         return
-    text = "<b>Daftar Owner:</b>\n" + "\n".join([f"• <code>{uid}</code>" for uid in OWNERS])
+    text = "<b>Daftar Owner Bot:</b>\n" + "\n".join([f"• <code>{uid}</code>" for uid in OWNERS])
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
 # ==================== INIT & RTP ====================
@@ -263,7 +263,7 @@ async def daftar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def jackpot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     games = ["Mahjong Ways 2", "Gates of Olympus", "Sweet Bonanza", "Starlight Princess"]
     amounts = [random.randint(50_000_000, 150_000_000) for _ in games]
-    text = "<b>JACKPOT GACOR HARI INI</b>\n\n" + "\n".join([f"• {g} → Rp {a:,}" for g, a in zip(games, amounts)]) + "\n\n<b>Gaspol sekarang!</b>"
+    text = "<b>JACKPOT GACOR HARI INI</b>\n\n" + "\n".join([f"• {g} — Rp {a:,}" for g, a in zip(games, amounts)]) + "\n\n<b>Gaspol sekarang!</b>"
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
 async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -295,7 +295,7 @@ async def rtp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not data:
         await regenerate_rtp(context)
         data = context.bot_data["rtp_data"]
-    text = "<b>RTP GACOR HARI INI (Update Otomatis)</b>\n\n" + "\n".join([f"• {g} → <b>{p}%</b>" for g, p in data.items()]) + "\n\nMain sekarang juga!"
+    text = "<b>RTP GACOR HARI INI (Update Otomatis)</b>\n\n" + "\n".join([f"• {g} — <b>{p}%</b>" for g, p in data.items()]) + "\n\nMain sekarang juga!"
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
 async def promo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -396,23 +396,52 @@ async def set_promo_button2(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.bot_data["promo_button2_url"] = context.args[1]
     await update.message.reply_text(f"Button 2 diupdate!")
 
-# ==================== HELP ====================
+# ==================== /help PINTAR — OWNER vs MEMBER (SUPER RAPI!) ====================
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = (
-        "<b>QUIZ4D GUARDIAN BOT</b>\n"
-        "<b>┌─ OWNER COMMAND</b>\n"
-        "├ /start_bot • /stop_bot • /add_message • /set_interval\n"
-        "├ /broadcast • /addowner • /removeowner • /listowner\n"
-        "└ /add_rtp_game • /remove_rtp_game • /rtp_games\n\n"
-        "<b>┌─ EDIT KONTEN</b>\n"
-        "├ /set_bonus_text • /set_bonus_url\n"
-        "├ /set_daftar_caption • /set_daftar_url • /set_daftar_photo\n"
-        "├ /set_link_caption • /set_link_url • /set_link_photo\n"
-        "├ /set_promo_text • /set_promo_photo • /set_promo_button1 • /set_promo_button2\n\n"
-        "<b>┌─ MEMBER</b>\n"
-        "├ /bonus • /daftar • /jackpot • /link • /live • /rules • /stats • /rtp • /promo\n\n"
-        "<b>Auto Welcome • Auto Post • Anti Scam • 24/7</b>"
-    )
+    user_id = update.effective_user.id
+
+    if is_owner(user_id):
+        # VERSI OWNER — LENGKAP & RAPI
+        text = (
+            "<b>QUIZ4D GUARDIAN BOT — OWNER PANEL</b>\n\n"
+            "┌─ <b>AUTO POST</b>\n"
+            "├ /start_bot — Nyalakan auto-post\n"
+            "├ /stop_bot — Matikan auto-post\n"
+            "├ /add_message — Tambah pesan auto\n"
+            "└ /set_interval — Ganti interval (menit)\n\n"
+            "┌─ <b>OWNER MANAGEMENT</b>\n"
+            "├ /addowner <ID> — Tambah owner baru\n"
+            "├ /removeowner <ID> — Hapus owner\n"
+            "└ /listowner — Lihat daftar owner\n\n"
+            "┌─ <b>EDIT KONTEN</b>\n"
+            "├ /set_bonus_text • /set_bonus_url\n"
+            "├ /set_daftar_caption • /set_daftar_url • /set_daftar_photo\n"
+            "├ /set_link_caption • /set_link_url • /set_link_photo\n"
+            "├ /set_promo_text • /set_promo_photo\n"
+            "├ /set_promo_button1 • /set_promo_button2\n"
+            "└ /broadcast — Kirim pesan ke semua PM\n\n"
+            "┌─ <b>RTP CONTROL</b>\n"
+            "├ /add_rtp_game • /remove_rtp_game • /rtp_games\n\n"
+            "<b>Bot aktif 24/7 • Webhook Mode • Data aman</b>"
+        )
+    else:
+        # VERSI MEMBER — RAPI, EKSKLUSIF, & AMAN
+        text = (
+            "<b>QUIZ4D GUARDIAN</b>\n"
+            "Grup resmi & terpercaya\n\n"
+            "<b>Command yang bisa kamu pakai:</b>\n\n"
+            "├ /bonus — Claim bonus harian\n"
+            "├ /daftar — Link daftar resmi\n"
+            "├ /link — Link resmi Quiz4D\n"
+            "├ /rtp — RTP gacor hari ini\n"
+            "├ /jackpot — Jackpot terbaru\n"
+            "├ /promo — Event & promo aktif\n"
+            "├ /live — Chat CS 24 jam\n"
+            "├ /rules — Peraturan grup\n"
+            "└ /stats — Total member\n\n"
+            "Main sekarang & menang besar bersama Quiz4D!"
+        )
+
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
 # ==================== ERROR & HANDLERS ====================
@@ -466,7 +495,7 @@ application.add_handler(MessageHandler(filters.PHOTO & ~filters.COMMAND & ~filte
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, anti_spam))
 application.add_handler(MessageHandler(filters.ALL & filters.ChatType.PRIVATE, collect_user_id))
 
-# ==================== WEBHOOK ONLY — NO SHUTDOWN ====================
+# ==================== WEBHOOK ONLY ====================
 @app.route("/webhook", methods=["POST"])
 def webhook():
     update = Update.de_json(request.get_json(force=True), application.bot)
