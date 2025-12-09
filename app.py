@@ -479,9 +479,14 @@ application.add_handler(MessageHandler(filters.PHOTO & ~filters.COMMAND & ~filte
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, anti_spam))
 application.add_handler(MessageHandler(filters.ALL & filters.ChatType.PRIVATE, collect_user_id))
 
-# Tambahin ini sebelum webhook
-import asyncio
-asyncio.create_task(application.bot.delete_webhook(drop_pending_updates=True))
+async def cleanup_webhook():
+    try:
+        await application.bot.delete_webhook(drop_pending_updates=True)
+        print("Webhook lama berhasil dibersihkan!")
+    except Exception as e:
+        print(f"Webhook sudah bersih atau error kecil: {e}")
+
+application.job_queue.run_once(lambda c: None, 1).callback = lambda: asyncio.create_task(cleanup_webhook())
 
 # ==================== RUN ====================
 @app.route("/webhook", methods=["POST"])
