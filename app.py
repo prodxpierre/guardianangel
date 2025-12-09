@@ -1,4 +1,4 @@
-# app.py — QUIZ4D GUARDIAN BOT V3.0 FINAL — RENDER 100% STABIL (WEBHOOK + DYNAMIC OWNER + PROMO FOTO + /help PINTAR)
+# app.py — QUIZ4D GUARDIAN BOT V3.0 FINAL — RENDER + GUNICORN (WEBHOOK ONLY — 100% STABIL)
 
 import os
 import random
@@ -48,39 +48,38 @@ def is_owner(user_id):
 
 async def add_owner(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_owner(update.effective_user.id):
-        return await update.message.reply_text("Hanya owner yang bisa nambah owner!")
+        return await update.message.reply_text("Hanya owner!")
     if not context.args:
         return await update.message.reply_text("Gunakan: /addowner <ID>")
     try:
         new_id = int(context.args[0])
         OWNERS.add(new_id)
         save_owners(OWNERS)
-        await update.message.reply_text(f"Owner {new_id} berhasil ditambahkan!")
+        await update.message.reply_text(f"Owner {new_id} ditambahkan!")
     except:
         await update.message.reply_text("ID tidak valid!")
 
 async def remove_owner(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != YOUR_USER_ID:
-        return await update.message.reply_text("Hanya owner utama yang bisa hapus owner!")
+        return await update.message.reply_text("Hanya owner utama!")
     if not context.args:
         return await update.message.reply_text("Gunakan: /removeowner <ID>")
     try:
         rid = int(context.args[0])
         if rid == YOUR_USER_ID:
-            return await update.message.reply_text("Kamu nggak bisa hapus diri sendiri!")
+            return await update.message.reply_text("Nggak bisa hapus diri sendiri!")
         if rid in OWNERS:
             OWNERS.remove(rid)
             save_owners(OWNERS)
-            await update.message.reply_text(f"Owner {rid} berhasil dihapus!")
+            await update.message.reply_text(f"Owner {rid} dihapus!")
         else:
-            await update.message.reply_text("User bukan owner!")
+            await update.message.reply_text("Bukan owner!")
     except:
         await update.message.reply_text("ID tidak valid!")
 
 async def list_owner(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id):
-        return
-    text = "<b>Daftar Owner Bot:</b>\n" + "\n".join([f"• <code>{uid}</code>" for uid in OWNERS])
+    if not is_owner(update.effective_user.id): return
+    text = "<b>Daftar Owner:</b>\n" + "\n".join([f"• <code>{uid}</code>" for uid in OWNERS])
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
 # ==================== INIT & RTP ====================
@@ -189,7 +188,7 @@ async def set_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args: return await update.message.reply_text("Contoh: /set_welcome Halo {name}!")
     text = " ".join(context.args)
     context.bot_data["welcome"] = text
-    await update.message.reply_text(f"Welcome diganti!\nPreview: {text.replace('{name}', 'Bro')}")
+    await update.message.reply_text(f"Welcome diganti!")
 
 async def welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     init(context)
@@ -199,33 +198,33 @@ async def welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ==================== FOTO & PROMO FOTO ====================
 async def set_daftar_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id): return await update.message.reply_text("Kamu bukan owner!")
+    if not is_owner(update.effective_user.id): return
     if not update.message.photo: return await update.message.reply_text("Kirim foto + caption: /set_daftar_photo")
     context.bot_data["daftar_photo"] = update.message.photo[-1].file_id
     await update.message.reply_text("Foto daftar diganti!")
 
 async def set_link_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id): return await update.message.reply_text("Kamu bukan owner!")
+    if not is_owner(update.effective_user.id): return
     if not update.message.photo: return await update.message.reply_text("Kirim foto + caption: /set_link_photo")
     context.bot_data["link_photo"] = update.message.photo[-1].file_id
     await update.message.reply_text("Foto link diganti!")
 
 async def set_promo_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id): return await update.message.reply_text("Kamu bukan owner!")
+    if not is_owner(update.effective_user.id): return
     if not update.message.photo: return await update.message.reply_text("Kirim foto + caption: /set_promo_photo")
     context.bot_data["promo_photo"] = update.message.photo[-1].file_id
     await update.message.reply_text("Foto promo diganti!")
 
 # ==================== RTP CONTROL ====================
 async def rtp_games(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id): return await update.message.reply_text("Kamu bukan owner!")
+    if not is_owner(update.effective_user.id): return
     init(context)
     games = context.bot_data["rtp_games"]
     text = "<b>Daftar Game RTP:</b>\n\n" + "\n".join([f"{i}. {g}" for i, g in enumerate(games, 1)]) + f"\n\nTotal: {len(games)} game"
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
 async def remove_rtp_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id): return await update.message.reply_text("Kamu bukan owner!")
+    if not is_owner(update.effective_user.id): return
     if not context.args: return await update.message.reply_text("Gunakan: /remove_rtp_game <nama game>")
     game_name = " ".join(context.args).strip()
     init(context)
@@ -236,7 +235,7 @@ async def remove_rtp_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Game tidak ditemukan!")
 
 async def add_rtp_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id): return await update.message.reply_text("Kamu bukan owner!")
+    if not is_owner(update.effective_user.id): return
     if not context.args: return await update.message.reply_text("Gunakan: /add_rtp_game <nama game>")
     game_name = " ".join(context.args).strip()
     init(context)
@@ -341,105 +340,89 @@ async def collect_user_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ==================== EDIT COMMANDS ====================
 async def set_bonus_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id): return await update.message.reply_text("Kamu bukan owner!")
+    if not is_owner(update.effective_user.id): return
     if not context.args: return await update.message.reply_text("Gunakan: /set_bonus_text teks baru")
     context.bot_data["bonus_text"] = " ".join(context.args)
     await update.message.reply_text("Teks bonus diupdate!")
 
 async def set_bonus_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id): return await update.message.reply_text("Kamu bukan owner!")
+    if not is_owner(update.effective_user.id): return
     if not context.args: return await update.message.reply_text("Gunakan: /set_bonus_url https://...")
     context.bot_data["bonus_url"] = context.args[0]
     await update.message.reply_text("URL bonus diupdate!")
 
 async def set_daftar_caption(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id): return await update.message.reply_text("Kamu bukan owner!")
+    if not is_owner(update.effective_user.id): return
     if not context.args: return await update.message.reply_text("Gunakan: /set_daftar_caption caption baru")
     context.bot_data["daftar_caption"] = " ".join(context.args)
     await update.message.reply_text("Caption daftar diupdate!")
 
 async def set_daftar_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id): return await update.message.reply_text("Kamu bukan owner!")
+    if not is_owner(update.effective_user.id): return
     if not context.args: return await update.message.reply_text("Gunakan: /set_daftar_url https://...")
     context.bot_data["daftar_url"] = context.args[0]
     await update.message.reply_text("URL daftar diupdate!")
 
 async def set_link_caption(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id): return await update.message.reply_text("Kamu bukan owner!")
+    if not is_owner(update.effective_user.id): return
     if not context.args: return await update.message.reply_text("Gunakan: /set_link_caption caption baru")
     context.bot_data["link_caption"] = " ".join(context.args)
     await update.message.reply_text("Caption link diupdate!")
 
 async def set_link_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id): return await update.message.reply_text("Kamu bukan owner!")
+    if not is_owner(update.effective_user.id): return
     if not context.args: return await update.message.reply_text("Gunakan: /set_link_url https://...")
     context.bot_data["link_url"] = context.args[0]
     await update.message.reply_text("URL link diupdate!")
 
 async def set_promo_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id): return await update.message.reply_text("Kamu bukan owner!")
+    if not is_owner(update.effective_user.id): return
     if not context.args: return await update.message.reply_text("Gunakan: /set_promo_text teks baru")
     context.bot_data["promo_text"] = " ".join(context.args)
     await update.message.reply_text("Teks promo diupdate!")
 
 async def set_promo_button1(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id): return await update.message.reply_text("Kamu bukan owner!")
+    if not is_owner(update.effective_user.id): return
     if len(context.args) < 2: return await update.message.reply_text("Gunakan: /set_promo_button1 <nama> <link>")
     context.bot_data["promo_button1_text"] = context.args[0]
     context.bot_data["promo_button1_url"] = context.args[1]
-    await update.message.reply_text(f"Button 1 diupdate!")
+    await update.message.reply_text("Button 1 diupdate!")
 
 async def set_promo_button2(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id): return await update.message.reply_text("Kamu bukan owner!")
+    if not is_owner(update.effective_user.id): return
     if len(context.args) < 2: return await update.message.reply_text("Gunakan: /set_promo_button2 <nama> <link>")
     context.bot_data["promo_button2_text"] = context.args[0]
     context.bot_data["promo_button2_url"] = context.args[1]
-    await update.message.reply_text(f"Button 2 diupdate!")
+    await update.message.reply_text("Button 2 diupdate!")
 
-# ==================== /help PINTAR — OWNER vs MEMBER (SUDAH AMAN, RAPIH, & CANTIK) ====================
+# ==================== /help PINTAR — RAPI & AMAN ====================
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
     if is_owner(user_id):
-        # VERSI OWNER — LENGKAP & SUPER RAPI
         text = (
             "QUIZ4D GUARDIAN BOT — OWNER PANEL\n\n"
             "AUTO POST\n"
-            "├ /start_bot — Nyalakan auto-post\n"
-            "├ /stop_bot — Matikan auto-post\n"
-            "├ /add_message — Tambah pesan auto\n"
-            "└ /set_interval — Ganti interval (menit)\n\n"
+            "├ /start_bot — Nyalakan\n"
+            "├ /stop_bot — Matikan\n"
+            "├ /add_message — Tambah pesan\n"
+            "└ /set_interval — Ganti interval\n\n"
             "OWNER MANAGEMENT\n"
-            "├ /addowner <ID> — Tambah owner\n"
-            "├ /removeowner <ID> — Hapus owner\n"
-            "└ /listowner — Lihat daftar owner\n\n"
+            "├ /addowner • /removeowner • /listowner\n\n"
             "EDIT KONTEN\n"
-            "├ /set_bonus_text • /set_bonus_url\n"
-            "├ /set_daftar_caption • /set_daftar_url • /set_daftar_photo\n"
-            "├ /set_link_caption • /set_link_url • /set_link_photo\n"
-            "├ /set_promo_text • /set_promo_photo\n"
-            "├ /set_promo_button1 • /set_promo_button2\n"
-            "└ /broadcast — Kirim ke semua PM\n\n"
-            "RTP CONTROL\n"
-            "├ /add_rtp_game • /remove_rtp_game • /rtp_games\n\n"
-            "Bot aktif 24/7 • Webhook Mode • Data aman"
+            "├ Bonus • Daftar • Link • Promo • Foto\n"
+            "└ /broadcast • RTP Control\n\n"
+            "Bot aktif 24/7 • Webhook Mode"
         )
     else:
-        # VERSI MEMBER — RAPI & EKSKLUSIF
         text = (
             "QUIZ4D GUARDIAN\n"
             "Grup resmi & terpercaya\n\n"
-            "Command yang bisa kamu pakai:\n\n"
-            "├ /bonus — Claim bonus harian\n"
-            "├ /daftar — Link daftar resmi\n"
-            "├ /link — Link resmi Quiz4D\n"
-            "├ /rtp — RTP gacor hari ini\n"
-            "├ /jackpot — Jackpot terbaru\n"
-            "├ /promo — Event & promo aktif\n"
-            "├ /live — Chat CS 24 jam\n"
-            "├ /rules — Peraturan grup\n"
-            "└ /stats — Total member\n\n"
-            "Main sekarang & menang besar bersama Quiz4D!"
+            "Command:\n"
+            "├ /bonus • /daftar • /link\n"
+            "├ /rtp • /jackpot • /promo\n"
+            "├ /live • /rules • /stats\n\n"
+            "Main sekarang & menang besar!"
         )
 
     await update.message.reply_text(text)
@@ -495,24 +478,22 @@ application.add_handler(MessageHandler(filters.PHOTO & ~filters.COMMAND & ~filte
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, anti_spam))
 application.add_handler(MessageHandler(filters.ALL & filters.ChatType.PRIVATE, collect_user_id))
 
-# ==================== WEBHOOK ONLY ====================
+# ==================== WEBHOOK ONLY — GUNICORN READY ====================
 @app.route("/webhook", methods=["POST"])
 def webhook():
     update = Update.de_json(request.get_json(force=True), application.bot)
     application.process_update(update)
     return "OK", 200
 
-if __name__ != "__main__":
-    import asyncio
-    APP_URL = f"https://{os.environ['RENDER_EXTERNAL_HOSTNAME']}.onrender.com/webhook"
-    print(f"QUIZ4D BOT V3.0 STARTED — Setting webhook: {APP_URL}")
-    asyncio.run(application.bot.set_webhook(url=APP_URL, drop_pending_updates=True))
-    application.run_webhook(
-        listen="0.0.0.0",
-        port=int(os.environ.get("PORT", 10000)),
-        url_path="/webhook",
-        webhook_url=APP_URL
-    )
-else:
-    print("Local testing mode")
-    application.run_polling()
+# WEBHOOK STARTUP — LANGSUNG JALAN KALAU GUNICORN
+import asyncio
+APP_URL = f"https://{os.environ['RENDER_EXTERNAL_HOSTNAME']}.onrender.com/webhook"
+print(f"QUIZ4D BOT V3.0 STARTED — Setting webhook: {APP_URL}")
+asyncio.run(application.bot.set_webhook(url=APP_URL, drop_pending_updates=True))
+
+application.run_webhook(
+    listen="0.0.0.0",
+    port=int(os.environ.get("PORT", 10000)),
+    url_path="/webhook",
+    webhook_url=APP_URL
+)
