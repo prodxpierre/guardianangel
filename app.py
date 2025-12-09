@@ -396,40 +396,40 @@ async def set_promo_button2(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.bot_data["promo_button2_url"] = context.args[1]
     await update.message.reply_text(f"Button 2 diupdate!")
 
-# ==================== /help PINTAR — OWNER vs MEMBER (SUPER RAPI!) ====================
+# ==================== /help PINTAR — OWNER vs MEMBER (SUDAH AMAN, RAPIH, & CANTIK) ====================
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
     if is_owner(user_id):
-        # VERSI OWNER — LENGKAP & RAPI
+        # VERSI OWNER — LENGKAP & SUPER RAPI
         text = (
-            "<b>QUIZ4D GUARDIAN BOT — OWNER PANEL</b>\n\n"
-            "┌─ <b>AUTO POST</b>\n"
+            "QUIZ4D GUARDIAN BOT — OWNER PANEL\n\n"
+            "AUTO POST\n"
             "├ /start_bot — Nyalakan auto-post\n"
             "├ /stop_bot — Matikan auto-post\n"
             "├ /add_message — Tambah pesan auto\n"
             "└ /set_interval — Ganti interval (menit)\n\n"
-            "┌─ <b>OWNER MANAGEMENT</b>\n"
-            "├ /addowner <ID> — Tambah owner baru\n"
+            "OWNER MANAGEMENT\n"
+            "├ /addowner <ID> — Tambah owner\n"
             "├ /removeowner <ID> — Hapus owner\n"
             "└ /listowner — Lihat daftar owner\n\n"
-            "┌─ <b>EDIT KONTEN</b>\n"
+            "EDIT KONTEN\n"
             "├ /set_bonus_text • /set_bonus_url\n"
             "├ /set_daftar_caption • /set_daftar_url • /set_daftar_photo\n"
             "├ /set_link_caption • /set_link_url • /set_link_photo\n"
             "├ /set_promo_text • /set_promo_photo\n"
             "├ /set_promo_button1 • /set_promo_button2\n"
-            "└ /broadcast — Kirim pesan ke semua PM\n\n"
-            "┌─ <b>RTP CONTROL</b>\n"
+            "└ /broadcast — Kirim ke semua PM\n\n"
+            "RTP CONTROL\n"
             "├ /add_rtp_game • /remove_rtp_game • /rtp_games\n\n"
-            "<b>Bot aktif 24/7 • Webhook Mode • Data aman</b>"
+            "Bot aktif 24/7 • Webhook Mode • Data aman"
         )
     else:
-        # VERSI MEMBER — RAPI, EKSKLUSIF, & AMAN
+        # VERSI MEMBER — RAPI & EKSKLUSIF
         text = (
-            "<b>QUIZ4D GUARDIAN</b>\n"
+            "QUIZ4D GUARDIAN\n"
             "Grup resmi & terpercaya\n\n"
-            "<b>Command yang bisa kamu pakai:</b>\n\n"
+            "Command yang bisa kamu pakai:\n\n"
             "├ /bonus — Claim bonus harian\n"
             "├ /daftar — Link daftar resmi\n"
             "├ /link — Link resmi Quiz4D\n"
@@ -442,7 +442,7 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Main sekarang & menang besar bersama Quiz4D!"
         )
 
-    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+    await update.message.reply_text(text)
 
 # ==================== ERROR & HANDLERS ====================
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
