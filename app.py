@@ -479,6 +479,10 @@ application.add_handler(MessageHandler(filters.PHOTO & ~filters.COMMAND & ~filte
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, anti_spam))
 application.add_handler(MessageHandler(filters.ALL & filters.ChatType.PRIVATE, collect_user_id))
 
+# Tambahin ini sebelum webhook
+import asyncio
+asyncio.create_task(application.bot.delete_webhook(drop_pending_updates=True))
+
 # ==================== RUN ====================
 @app.route("/webhook", methods=["POST"])
 def webhook():
