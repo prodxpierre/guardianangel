@@ -553,3 +553,4 @@ def webhook():
 if __name__ == "__main__":
     print("Quiz4D Guardian Bot V3.0 FINAL — 100% COMPLETE & READY TO DEPLOY!")
     application.run_polling(drop_pending_updates=True)
+
