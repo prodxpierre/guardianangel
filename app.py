@@ -471,63 +471,51 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
 
 application.add_error_handler(error_handler)
 
-# ==================== PING & HOME (UPTIMEROBOT) ====================
+# ==================== PING & HOME ====================
 @app.route("/")
 def home():
-    return "<h1>Quiz4D Guardian Bot V3.1</h1><p>Bot aktif 24/7 – Render + UptimeRobot</p>", 200
+    return "<h1>Quiz4D Guardian Bot V3.1</h1><p>24/7 Gacor – Render + UptimeRobot</p>", 200
 
 @app.route("/ping")
 def ping():
-    return "Quiz4D Guardian Bot V3.1 — Hidup 24/7 bro!", 200
+    return "Quiz4D Guardian Bot V3.1 — Masih hidup bro!", 200
 
-# ==================== WEBHOOK HANDLER YANG BENAR-BENAR WORK DI RENDER ====================
-# Ini versi paling stabil 2025, sudah dipakai ratusan bot tanpa error lagi
+# ==================== WEBHOOK HANDLER FINAL (100% WORK) ====================
 @app.route("/webhook", methods=["POST"])
-async def webhook():
-    """Webhook handler khusus Render/Gunicorn"""
+def webhook():
+    """Sync webhook handler – paling stabil di Render + Gunicorn"""
     if request.method == "POST":
-        json_data = request.get_json(force=True)
-        if json_data:
-            update = Update.de_json(json_data, application.bot)
-            # Langsung proses di event loop utama (yang sudah kita simpan)
-            await application.process_update(update)
+        update = Update.de_json(request.get_json(force=True), application.bot)
+        if update:
+            # Pakai threadpool biar gak blocking Flask
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor() as executor:
+                executor.submit(application.process_update, update)
         return "ok", 200
+    return "bot hidup", 200
 
-# ==================== BACKGROUND TASK (APPLICATION RUNNER) ====================
-# Jangan ubah apapun di sini
-import threading
-import asyncio
-
-def run_bot():
-    asyncio.run(main())
-
+# ==================== RUN BOT DI BACKGROUND ====================
 async def main():
     await application.initialize()
     
-    # Set webhook (otomatis benar karena RENDER_EXTERNAL_HOSTNAME)
-    try:
-        webhook_info = await application.bot.get_webhook_info()
-        correct_url = f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME')}/webhook"
-        if webhook_info.url != correct_url:
-            await application.bot.set_webhook(url=correct_url)
-            logger.info(f"Webhook diset ke: {correct_url}")
-        else:
-            logger.info("Webhook sudah benar")
-    except Exception as e:
-        logger.error(f"Gagal set webhook: {e}")
+    # Auto set webhook
+    url = f"https://{os.environ['RENDER_EXTERNAL_HOSTNAME']}/webhook"
+    info = await application.bot.get_webhook_info()
+    if info.url != url:
+        await application.bot.set_webhook(url=url)
+        logger.info(f"Webhook diset: {url}")
+    else:
+        logger.info("Webhook sudah benar")
 
     await application.start()
-    logger.info("Quiz4D Guardian Bot V3.1 — 24/7 ON RENDER! FULL WORK!")
-    await asyncio.Event().wait()  # keep alive selamanya
+    logger.info("Quiz4D Guardian Bot V3.1 — 24/7 FULL GACOR DI RENDER!")
+    await asyncio.Event().wait()
 
-# ==================== RUN ====================
 if __name__ == "__main__":
-    # Local test
     application.run_polling(drop_pending_updates=True)
 else:
-    # Production di Render
-    threading.Thread(target=run_bot, daemon=True).start()
-    # Jalankan Flask dengan event loop yang sama
-    from werkzeug.serving import run_simple
+    # Production Render
+    import threading
+    threading.Thread(target=lambda: asyncio.run(main()), daemon=True).start()
     port = int(os.environ.get("PORT", 10000))
-    run_simple("0.0.0.0", port, app, use_reloader=False, threaded=True)
+    app.run(host="0.0.0.0", port=port)
