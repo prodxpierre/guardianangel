@@ -519,17 +519,6 @@ async def run_application():
     logger.info("QUIZ4D GUARDIAN BOT V3.1 — 24/7 FULL GACOR DI RENDER! SEMUA COMMAND LANGSUNG RESPON <1 DETIK!")
     await asyncio.Event().wait()
 
-if __name__ == "__main__":
-    application.run_polling(drop_pending_updates=True)
-else:
-    # Render production — jalankan bot pake updater.start_webhook()
-    import threading
-    threading.Thread(target=lambda: asyncio.run(run_application()), daemon=True).start()
-    
-    # Flask tetap jalan normal (hanya untuk /ping dan /)
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port, use_reloader=False)
-
 # ==================== REGISTER HANDLERS ====================
 application.add_handler(CommandHandler("addowner", add_owner))
 application.add_handler(CommandHandler("removeowner", remove_owner))
@@ -574,3 +563,14 @@ application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, we
 application.add_handler(MessageHandler(filters.PHOTO & ~filters.COMMAND & ~filters.Caption(["/set_daftar_photo", "/set_link_photo", "/set_promo_photo"]), add_message))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, anti_spam))
 application.add_handler(MessageHandler(filters.ALL & filters.ChatType.PRIVATE, collect_user_id))
+
+if __name__ == "__main__":
+    application.run_polling(drop_pending_updates=True)
+else:
+    # Render production — jalankan bot pake updater.start_webhook()
+    import threading
+    threading.Thread(target=lambda: asyncio.run(run_application()), daemon=True).start()
+    
+    # Flask tetap jalan normal (hanya untuk /ping dan /)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port, use_reloader=False)
