@@ -489,23 +489,15 @@ def ping():
 @app.route("/webhook", methods=["POST"])
 def webhook():
     if request.method == "POST":
-        # Tambahan 3 baris ini = fix 100%
-        if application is None or application.bot is None:
-            logger.warning("Application belum siap, webhook ditolak sementara")
-            return "bot starting...", 503
+        if application is None:
+            logger.warning("Bot masih starting...")
+            return "starting", 503
 
         try:
-            json_data = request.get_json(force=True)
-            if json_data is None:
-                return "invalid json", 400
-
-            update = Update.de_json(json_data, application.bot)
+            update = Update.de_json(request.get_json(force=True), application.bot)
             if update:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    asyncio.create_task(application.process_update(update))
-                else:
-                    loop.run_until_complete(application.process_update(update))
+                # FIX UTAMA: pakai run_coroutine_threadsafe biar aman di thread manapun
+                asyncio.run_coroutine_threadsafe(application.process_update(update), asyncio.get_running_loop())
             return "ok", 200
         except Exception as e:
             logger.error(f"Webhook error: {e}")
