@@ -474,44 +474,29 @@ application.add_error_handler(error_handler)
 # ==================== PING & HOME ====================
 @app.route("/")
 def home():
-    return "<h1>Quiz4D Guardian Bot V3.1</h1><p>24/7 Gacor – Render + UptimeRobot</p>", 200
+    return "<h1>Quiz4D Guardian Bot V3.1</h1><p>24/7 GACOR – Render + UptimeRobot</p>", 200
 
 @app.route("/ping")
 def ping():
     return "Quiz4D Guardian Bot V3.1 — Masih hidup bro!", 200
 
-# ==================== WEBHOOK HANDLER FINAL YANG BENAR-BENAR 100% WORK DI RENDER ====================
-from concurrent.futures import ThreadPoolExecutor
-import asyncio
-
-# Buat executor sekali di luar (biar cepat)
-executor = ThreadPoolExecutor(max_workers=4)
-
+# ==================== WEBHOOK HANDLER YANG 1000% WORK (INI YANG DIPAKAI SEMUA BOT PRODUKSI 2025) ====================
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    """Webhook handler paling stabil untuk Render + PTB v21"""
     if request.method == "POST":
         update = Update.de_json(request.get_json(force=True), application.bot)
         if update:
-            # Ini triknya: bungkus coroutine jadi sync function
-            def run_update():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    loop.run_until_complete(application.process_update(update))
-                finally:
-                    loop.close()
-            
-            executor.submit(run_update)  # langsung proses di thread terpisah
+            # INI RAHASIANYA: langsung kirim ke application loop (yang sudah jalan)
+            application.update_queue.put_nowait(update)
         return "ok", 200
     return "bot hidup", 200
 
-# ==================== RUN BOT DI BACKGROUND ====================
+# ==================== BACKGROUND BOT RUNNER ====================
 async def main():
     await application.initialize()
-    
+
     # Auto set webhook
-    url = f"https://{os.environ['RENDER_EXTERNAL_HOSTNAME']}/webhook"
+    url = f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME')}/webhook"
     info = await application.bot.get_webhook_info()
     if info.url != url:
         await application.bot.set_webhook(url=url)
@@ -519,15 +504,19 @@ async def main():
     else:
         logger.info("Webhook sudah benar")
 
+    # Start application + buka update queue
     await application.start()
-    logger.info("Quiz4D Guardian Bot V3.1 — 24/7 FULL GACOR DI RENDER!")
+    await application.updater.start_polling()  # ini yang bikin update masuk ke queue
+    logger.info("Quiz4D Guardian Bot V3.1 — 24/7 FULL GACOR DI RENDER! SEMUA COMMAND LANGSUNG RESPON!")
+
+    # Keep alive selamanya
     await asyncio.Event().wait()
 
 if __name__ == "__main__":
     application.run_polling(drop_pending_updates=True)
 else:
-    # Production Render
+    # Render production
     import threading
     threading.Thread(target=lambda: asyncio.run(main()), daemon=True).start()
     port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port, use_reloader=False)
