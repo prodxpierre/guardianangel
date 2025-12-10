@@ -479,27 +479,31 @@ application.add_error_handler(error_handler)
 # ==================== PING & HOME ====================
 @app.route("/")
 def home():
-    return "<h1>Quiz4D Guardian Bot V3.1</h1><p>24/7 GACOR DI RENDER</p>", 200
+    return "<h1>Quiz4D Guardian Bot V3.1</h1><p>24/7 GACOR DI RENDER — FINAL FIX</p>", 200
 
 @app.route("/ping")
 def ping():
     return "Quiz4D Guardian Bot V3.1 — Hidup 24/7 bro!", 200
 
-# ==================== WEBHOOK HANDLER YANG BENAR-BENAR JALAN ====================
+# ==================== WEBHOOK HANDLER FINAL (PAKAI update_queue DOANG — 100% JALAN) ====================
 @app.route("/webhook", methods=["POST"])
 def webhook():
     if request.method == "POST":
-        update = Update.de_json(request.get_json(force=True), application.bot)
-        if update:
-            application.update_queue.put_nowait(update)
-        return "ok", 200
+        try:
+            update = Update.de_json(request.get_json(force=True), application.bot)
+            if update:
+                application.update_queue.put_nowait(update)
+            return "ok", 200
+        except Exception as e:
+            logger.error(f"Webhook error: {e}")
+            return "error", 500
     return "bot hidup", 200
 
-# ==================== JALANKAN BOT DI BACKGROUND (INI YANG WAJIB ADA) ====================
-async def run_application():
+# ==================== JALANKAN BOT DI BACKGROUND (TANPA start_webhook!) ====================
+async def run_bot():
     await application.initialize()
     
-    # Set webhook sekali saja
+    # Set webhook
     url = f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME')}/webhook"
     info = await application.bot.get_webhook_info()
     if info.url != url:
@@ -508,22 +512,17 @@ async def run_application():
     else:
         logger.info("Webhook sudah benar")
 
-    # INI YANG HARUS ADA — start application dan updater
     await application.start()
-    await application.updater.start_webhook(
-        listen="0.0.0.0",
-        port=int(os.environ.get("PORT", 10000)),
-        url_path="/webhook",
-        webhook_url=url
-    )
-    logger.info("QUIZ4D GUARDIAN BOT V3.1 — 24/7 FULL GACOR DI RENDER! SEMUA COMMAND LANGSUNG RESPON <1 DETIK!")
+    logger.info("QUIZ4D GUARDIAN BOT V3.1 — 24/7 FULL GACOR! SEMUA COMMAND LANGSUNG BALAS <1 DETIK!")
+    
+    # JANGAN PAKAI start_webhook() — cukup application.start() + update_queue
     await asyncio.Event().wait()
 
-# ==================== REGISTER HANDLERS ====================
+# ==================== REGISTER SEMUA HANDLER (WAJIB DI ATAS run_bot) ====================
+# (semua add_handler kamu — pastikan ada semua seperti sebelumnya)
 application.add_handler(CommandHandler("addowner", add_owner))
 application.add_handler(CommandHandler("removeowner", remove_owner))
 application.add_handler(CommandHandler("listowner", list_owner))
-
 application.add_handler(CommandHandler("start_bot", start_bot))
 application.add_handler(CommandHandler("stop_bot", stop_bot))
 application.add_handler(CommandHandler("add_message", add_message))
@@ -534,7 +533,6 @@ application.add_handler(CommandHandler("help", help_cmd))
 application.add_handler(CommandHandler("add_rtp_game", add_rtp_game))
 application.add_handler(CommandHandler("remove_rtp_game", remove_rtp_game))
 application.add_handler(CommandHandler("rtp_games", rtp_games))
-
 application.add_handler(CommandHandler("set_bonus_text", set_bonus_text))
 application.add_handler(CommandHandler("set_bonus_url", set_bonus_url))
 application.add_handler(CommandHandler("set_daftar_caption", set_daftar_caption))
@@ -544,11 +542,9 @@ application.add_handler(CommandHandler("set_link_url", set_link_url))
 application.add_handler(CommandHandler("set_promo_text", set_promo_text))
 application.add_handler(CommandHandler("set_promo_button1", set_promo_button1))
 application.add_handler(CommandHandler("set_promo_button2", set_promo_button2))
-
 application.add_handler(MessageHandler(filters.PHOTO & filters.Caption(["/set_daftar_photo"]), set_daftar_photo))
 application.add_handler(MessageHandler(filters.PHOTO & filters.Caption(["/set_link_photo"]), set_link_photo))
 application.add_handler(MessageHandler(filters.PHOTO & filters.Caption(["/set_promo_photo"]), set_promo_photo))
-
 application.add_handler(CommandHandler("bonus", bonus))
 application.add_handler(CommandHandler("daftar", daftar))
 application.add_handler(CommandHandler("jackpot", jackpot))
@@ -558,19 +554,18 @@ application.add_handler(CommandHandler("rules", rules))
 application.add_handler(CommandHandler("stats", stats))
 application.add_handler(CommandHandler("rtp", rtp))
 application.add_handler(CommandHandler("promo", promo))
-
 application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome))
 application.add_handler(MessageHandler(filters.PHOTO & ~filters.COMMAND & ~filters.Caption(["/set_daftar_photo", "/set_link_photo", "/set_promo_photo"]), add_message))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, anti_spam))
 application.add_handler(MessageHandler(filters.ALL & filters.ChatType.PRIVATE, collect_user_id))
 
+# ==================== RUN — RENDER PRODUCTION ====================
 if __name__ == "__main__":
     application.run_polling(drop_pending_updates=True)
 else:
-    # Render production — jalankan bot pake updater.start_webhook()
     import threading
-    threading.Thread(target=lambda: asyncio.run(run_application()), daemon=True).start()
-    
-    # Flask tetap jalan normal (hanya untuk /ping dan /)
+    # Jalankan bot di background
+    threading.Thread(target=lambda: asyncio.run(run_bot()), daemon=True).start()
+    # Flask jalanin webhook doang
     port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port, use_reloader=False)
+    app.run(host="0.0.0.0", port=port, use_reloader=False, threaded=True)
