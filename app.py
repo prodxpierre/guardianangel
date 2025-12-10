@@ -480,17 +480,29 @@ def home():
 def ping():
     return "Quiz4D Guardian Bot V3.1 — Masih hidup bro!", 200
 
-# ==================== WEBHOOK HANDLER FINAL (100% WORK) ====================
+# ==================== WEBHOOK HANDLER FINAL YANG BENAR-BENAR 100% WORK DI RENDER ====================
+from concurrent.futures import ThreadPoolExecutor
+import asyncio
+
+# Buat executor sekali di luar (biar cepat)
+executor = ThreadPoolExecutor(max_workers=4)
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    """Sync webhook handler – paling stabil di Render + Gunicorn"""
+    """Webhook handler paling stabil untuk Render + PTB v21"""
     if request.method == "POST":
         update = Update.de_json(request.get_json(force=True), application.bot)
         if update:
-            # Pakai threadpool biar gak blocking Flask
-            from concurrent.futures import ThreadPoolExecutor
-            with ThreadPoolExecutor() as executor:
-                executor.submit(application.process_update, update)
+            # Ini triknya: bungkus coroutine jadi sync function
+            def run_update():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(application.process_update(update))
+                finally:
+                    loop.close()
+            
+            executor.submit(run_update)  # langsung proses di thread terpisah
         return "ok", 200
     return "bot hidup", 200
 
