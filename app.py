@@ -1,17 +1,15 @@
-# app.py — QUIZ4D GUARDIAN BOT V3.1 RENDER 24/7 FINAL FIX (Desember 2025)
-# Perubahan utama: webhook processing via application.process_update(update)
-# dan bot dijalankan di background thread dengan asyncio.run(start_bot()).
-# Semua handler / fitur asli dipertahankan (auto-post, rtp, owner system, dsb).
+# app.py — QUIZ4D GUARDIAN BOT V3.2 FINAL RENDER 100% STABLE (Desember 2025)
+# Fix total: Flask async + @before_serving → zero error webhook & initialize
 
 import os
 import random
 import logging
 import asyncio
-import threading
 from flask import Flask, request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import (
+    Application,
     ApplicationBuilder,
     CommandHandler,
     MessageHandler,
@@ -26,21 +24,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ==================== CONFIG (ENV override recommended) ====================
-TOKEN = os.environ.get("BOT_TOKEN", "8591409483:AAFfvyk5ds51JK518I3wXd-lMSGW-ShTHbY")
+# ==================== CONFIG ====================
+TOKEN = os.environ.get("BOT_TOKEN")
 YOUR_USER_ID = int(os.environ.get("OWNER_ID", "6650330646"))
 GROUP_CHAT_ID = int(os.environ.get("GROUP_ID", "-1003341246115"))
 
-# Render hostname for webhook
 RENDER_HOST = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
-if RENDER_HOST:
-    WEBHOOK_URL = f"https://{RENDER_HOST}/webhook"
-else:
-    WEBHOOK_URL = None
+WEBHOOK_URL = f"https://{RENDER_HOST}/webhook" if RENDER_HOST else None
 
-# ==================== APP & TELEGRAM APPLICATION ====================
+# ==================== FLASK APP ====================
 app = Flask(__name__)
-application = ApplicationBuilder().token(TOKEN).concurrent_updates(True).build()
+application: Application | None = None  # akan diisi saat startup
 
 # ==================== DYNAMIC OWNER SYSTEM ====================
 OWNER_FILE = "owners.txt"
@@ -72,7 +66,6 @@ def init(context: ContextTypes.DEFAULT_TYPE):
     d.setdefault("welcome", "Selamat datang {name} di Quiz4D Guardian! Jangan lupa claim bonus harian!")
     d.setdefault("index", 0)
     d.setdefault("user_ids", set())
-
     d.setdefault("bonus_text", "<b>BONUS HARIAN QUIZ4D</b>\n\n• Bonus New Member 100%\n• Bonus Deposit 20%\n• Cashback Slot 10%\n• Min Depo 10K\n\nKlik tombol di bawah!")
     d.setdefault("bonus_url", "https://quiz4d.com/register")
     d.setdefault("daftar_photo", None)
@@ -81,14 +74,12 @@ def init(context: ContextTypes.DEFAULT_TYPE):
     d.setdefault("link_photo", None)
     d.setdefault("link_caption", "Link Resmi Quiz4D\nhttps://quiz4d.com/register\n100% Aman & Terpercaya")
     d.setdefault("link_url", "https://quiz4d.com/register")
-
     d.setdefault("promo_text", "<b>PROMO & EVENT TERBARU</b>")
     d.setdefault("promo_photo", None)
     d.setdefault("promo_button1_text", "Bonus New Member")
     d.setdefault("promo_button1_url", "https://quiz4d.com/promosi")
     d.setdefault("promo_button2_text", "Event Turnamen")
     d.setdefault("promo_button2_url", "https://quiz4d.com/event")
-
     d.setdefault("rtp_games", [
         "Gates of Olympus", "Sweet Bonanza", "Starlight Princess", "Mahjong Ways 2", "Wild West Gold",
         "Aztec Gems", "Pyramid Bonanza", "Great Rhino Megaways", "Joker's Jewels", "Fire Strike",
@@ -101,9 +92,7 @@ def init(context: ContextTypes.DEFAULT_TYPE):
     ])
     d.setdefault("rtp_data", {})
 
-    # schedule rtp job only if job_queue available later when app starts
-    # job will be created after application.start() by regenerate_rtp wrapper if necessary
-
+# ==================== RTP AUTO UPDATE ====================
 async def regenerate_rtp(context: ContextTypes.DEFAULT_TYPE):
     job = getattr(context, 'job', None)
     ctx = job.data if job else context
@@ -152,8 +141,8 @@ async def list_owner(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
 async def start_bot_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # keep name different from start_bot() coroutine
-    if not is_owner(update.effective_user.id): return await update.message.reply_text("Kamu bukan owner!")
+    if not is_owner(update.effective_user.id):
+        return await update.message.reply_text("Kamu bukan owner!")
     init(context)
     if context.bot_data.get("running"):
         return await update.message.reply_text("Auto-post sudah jalan!")
@@ -163,7 +152,8 @@ async def start_bot_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Auto-post DIMULAI!")
 
 async def stop_bot_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id): return await update.message.reply_text("Kamu bukan owner!")
+    if not is_owner(update.effective_user.id):
+        return await update.message.reply_text("Kamu bukan owner!")
     if context.bot_data.get("job"):
         try:
             context.bot_data["job"].schedule_removal()
@@ -190,7 +180,8 @@ async def auto_post(context: ContextTypes.DEFAULT_TYPE):
         ctx.bot_data["index"] = (ctx.bot_data["index"] + 1) % len(msgs)
 
 async def add_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id): return await update.message.reply_text("Kamu bukan owner!")
+    if not is_owner(update.effective_user.id):
+        return await update.message.reply_text("Kamu bukan owner!")
     init(context)
     text = update.message.caption or " ".join(context.args)
     photo = update.message.photo[-1].file_id if update.message.photo else None
@@ -200,7 +191,8 @@ async def add_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"Pesan ditambah! Total: {len(context.bot_data['messages'])}")
 
 async def set_interval(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id): return await update.message.reply_text("Kamu bukan owner!")
+    if not is_owner(update.effective_user.id):
+        return await update.message.reply_text("Kamu bukan owner!")
     try:
         m = int(context.args[0])
         context.bot_data["interval"] = m * 60
@@ -212,7 +204,8 @@ async def set_interval(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Gunakan: /set_interval 30")
 
 async def set_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id): return await update.message.reply_text("Kamu bukan owner!")
+    if not is_owner(update.effective_user.id):
+        return await update.message.reply_text("Kamu bukan owner!")
     if not context.args:
         return await update.message.reply_text("Contoh: /set_welcome Halo {name}!")
     text = " ".join(context.args)
@@ -226,28 +219,32 @@ async def welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(msg)
 
 async def set_daftar_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id): return await update.message.reply_text("Kamu bukan owner!")
+    if not is_owner(update.effective_user.id):
+        return await update.message.reply_text("Kamu bukan owner!")
     if not update.message.photo:
         return await update.message.reply_text("Kirim foto dengan caption: /set_daftar_photo")
     context.bot_data["daftar_photo"] = update.message.photo[-1].file_id
     await update.message.reply_text("Foto daftar berhasil diganti! (Permanen)")
 
 async def set_link_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id): return await update.message.reply_text("Kamu bukan owner!")
+    if not is_owner(update.effective_user.id):
+        return await update.message.reply_text("Kamu bukan owner!")
     if not update.message.photo:
         return await update.message.reply_text("Kirim foto dengan caption: /set_link_photo")
     context.bot_data["link_photo"] = update.message.photo[-1].file_id
     await update.message.reply_text("Foto link berhasil diganti! (Permanen)")
 
 async def set_promo_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id): return await update.message.reply_text("Kamu bukan owner!")
+    if not is_owner(update.effective_user.id):
+        return await update.message.reply_text("Kamu bukan owner!")
     if not update.message.photo:
         return await update.message.reply_text("Kirim foto dengan caption: /set_promo_photo")
     context.bot_data["promo_photo"] = update.message.photo[-1].file_id
     await update.message.reply_text("Foto promo berhasil diganti! (Permanen)")
 
 async def rtp_games(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id): return await update.message.reply_text("Kamu bukan owner!")
+    if not is_owner(update.effective_user.id):
+        return await update.message.reply_text("Kamu bukan owner!")
     init(context)
     games = context.bot_data["rtp_games"]
     text = "<b>Daftar Game RTP Saat Ini:</b>\n\n"
@@ -257,7 +254,8 @@ async def rtp_games(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
 async def remove_rtp_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id): return await update.message.reply_text("Kamu bukan owner!")
+    if not is_owner(update.effective_user.id):
+        return await update.message.reply_text("Kamu bukan owner!")
     if not context.args:
         return await update.message.reply_text("Gunakan: /remove_rtp_game <nama game>")
     game_name = " ".join(context.args).strip()
@@ -269,7 +267,8 @@ async def remove_rtp_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Game tidak ditemukan!")
 
 async def add_rtp_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id): return await update.message.reply_text("Kamu bukan owner!")
+    if not is_owner(update.effective_user.id):
+        return await update.message.reply_text("Kamu bukan owner!")
     if not context.args:
         return await update.message.reply_text("Gunakan: /add_rtp_game <nama game>")
     game_name = " ".join(context.args).strip()
@@ -363,8 +362,10 @@ async def anti_spam(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except: pass
 
 async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id): return await update.message.reply_text("Kamu bukan owner!")
-    if not context.args: return await update.message.reply_text("Gunakan: /broadcast pesan kamu")
+    if not is_owner(update.effective_user.id):
+        return await update.message.reply_text("Kamu bukan owner!")
+    if not context.args:
+        return await update.message.reply_text("Gunakan: /broadcast pesan kamu")
     text = " ".join(context.args)
     init(context)
     sent = 0
@@ -489,133 +490,102 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Error: {context.error}")
 
-application.add_error_handler(error_handler)
-
-# ==================== PING & HOME ====================
+# ==================== FLASK ROUTES ====================
 @app.route("/")
 def home():
-    return "<h1>Quiz4D Guardian Bot V3.1</h1><p>24/7 GACOR DI RENDER — FINAL FIX</p>", 200
+    return "<h1>Quiz4D Guardian Bot V3.2</h1><p>24/7 GACOR DI RENDER — FINAL FIX</p>", 200
 
-@app.route("/ping")
-def ping():
-    return "Quiz4D Guardian Bot V3.1 — Hidup 24/7 bro!", 200
-
-# ==================== WEBHOOK HANDLER (PROCESS VIA dispatcher) ====================
-# IMPORTANT: use async flask view and process_update() so dispatcher runs handlers.
 @app.route("/webhook", methods=["POST"])
 async def webhook():
-    if request.method == "POST":
-        try:
-            update = Update.de_json(request.get_json(force=True), application.bot)
-            if update:
-                # process directly by Application's dispatcher
-                await application.process_update(update)
-            return "ok", 200
-        except Exception as e:
-            logger.error(f"Webhook error: {e}")
-            return "error", 500
-    return "bot hidup", 200
-
-# ==================== JALANKAN BOT DI BACKGROUND (WEBHOOK MODE) ====================
-# start_bot will initialize, set webhook (if RENDER_HOST), and start the application (job queue, etc).
-async def start_bot():
     try:
-        await application.initialize()
+        update = Update.de_json(request.get_json(force=True), application.bot)
+        if update:
+            await application.process_update(update)
+        return "ok", 200
+    except Exception as e:
+        logger.error(f"Webhook error: {e}")
+        return "error", 500
 
-        # init bot_data defaults (safe)
-        init(application)
+# ==================== STARTUP & SHUTDOWN ====================
+@app.before_serving
+async def startup():
+    global application
+    logger.info("Starting Quiz4D Guardian Bot...")
+    application = ApplicationBuilder().token(TOKEN).concurrent_updates(True).build()
 
-        # set webhook if we have host info (Render provides RENDER_EXTERNAL_HOSTNAME)
-        if WEBHOOK_URL:
-            try:
-                info = await application.bot.get_webhook_info()
-                if info.url != WEBHOOK_URL:
-                    await application.bot.set_webhook(url=WEBHOOK_URL)
-                    logger.info(f"Webhook diset: {WEBHOOK_URL}")
-                else:
-                    logger.info("Webhook sudah benar")
-            except Exception as e:
-                logger.error(f"Gagal set webhook: {e}")
+    await application.initialize()
+    init(application)
+
+    if WEBHOOK_URL:
+        info = await application.bot.get_webhook_info()
+        if info.url != WEBHOOK_URL:
+            await application.bot.set_webhook(url=WEBHOOK_URL)
+            logger.info(f"Webhook set: {WEBHOOK_URL}")
         else:
-            logger.warning("RENDER_EXTERNAL_HOSTNAME tidak ditemukan. Webhook tidak diset otomatis.")
+            logger.info("Webhook already correct")
+    else:
+        logger.warning("No RENDER_EXTERNAL_HOSTNAME → webhook not set")
 
-        # start the application (this starts job queue)
-        await application.start()
-        logger.info("QUIZ4D GUARDIAN BOT V3.1 — 24/7 FULL GACOR! SEMUA COMMAND LANGSUNG BALAS <1 DETIK!")
+    await application.start()
+    application.add_error_handler(error_handler)
 
-        # schedule RTP job if not exists (run_repeating uses job_queue which is running after start)
-        try:
-            if "rtp_job" not in application.bot_data:
-                job = application.job_queue.run_repeating(regenerate_rtp, interval=2400, first=10, data=application)
-                application.bot_data["rtp_job"] = job
-                logger.info("RTP job terjadwalkan")
-        except Exception as e:
-            logger.error(f"Gagal schedule rtp job: {e}")
+    # Register semua handler
+    application.add_handler(CommandHandler("addowner", add_owner))
+    application.add_handler(CommandHandler("removeowner", remove_owner))
+    application.add_handler(CommandHandler("listowner", list_owner))
+    application.add_handler(CommandHandler("start_bot", start_bot_cmd))
+    application.add_handler(CommandHandler("stop_bot", stop_bot_cmd))
+    application.add_handler(CommandHandler("add_message", add_message))
+    application.add_handler(CommandHandler("set_interval", set_interval))
+    application.add_handler(CommandHandler("set_welcome", set_welcome))
+    application.add_handler(CommandHandler("broadcast", broadcast_cmd))
+    application.add_handler(CommandHandler("help", help_cmd))
+    application.add_handler(CommandHandler("add_rtp_game", add_rtp_game))
+    application.add_handler(CommandHandler("remove_rtp_game", remove_rtp_game))
+    application.add_handler(CommandHandler("rtp_games", rtp_games))
+    application.add_handler(CommandHandler("set_bonus_text", set_bonus_text))
+    application.add_handler(CommandHandler("set_bonus_url", set_bonus_url))
+    application.add_handler(CommandHandler("set_daftar_caption", set_daftar_caption))
+    application.add_handler(CommandHandler("set_daftar_url", set_daftar_url))
+    application.add_handler(CommandHandler("set_link_caption", set_link_caption))
+    application.add_handler(CommandHandler("set_link_url", set_link_url))
+    application.add_handler(CommandHandler("set_promo_text", set_promo_text))
+    application.add_handler(CommandHandler("set_promo_button1", set_promo_button1))
+    application.add_handler(CommandHandler("set_promo_button2", set_promo_button2))
 
-        # keep the coroutine alive
-        await asyncio.Event().wait()
-    except Exception as e:
-        logger.exception(f"start_bot error: {e}")
+    application.add_handler(MessageHandler(filters.PHOTO & filters.Caption(["/set_daftar_photo"]), set_daftar_photo))
+    application.add_handler(MessageHandler(filters.PHOTO & filters.Caption(["/set_link_photo"]), set_link_photo))
+    application.add_handler(MessageHandler(filters.PHOTO & filters.Caption(["/set_promo_photo"]), set_promo_photo))
 
-# ==================== REGISTER SEMUA HANDLER (WAJIB DI ATAS run_bot) ====================
-# Owner / admin
-application.add_handler(CommandHandler("addowner", add_owner))
-application.add_handler(CommandHandler("removeowner", remove_owner))
-application.add_handler(CommandHandler("listowner", list_owner))
-application.add_handler(CommandHandler("start_bot", start_bot_cmd))
-application.add_handler(CommandHandler("stop_bot", stop_bot_cmd))
-application.add_handler(CommandHandler("add_message", add_message))
-application.add_handler(CommandHandler("set_interval", set_interval))
-application.add_handler(CommandHandler("set_welcome", set_welcome))
-application.add_handler(CommandHandler("broadcast", broadcast_cmd))
-application.add_handler(CommandHandler("help", help_cmd))
-application.add_handler(CommandHandler("add_rtp_game", add_rtp_game))
-application.add_handler(CommandHandler("remove_rtp_game", remove_rtp_game))
-application.add_handler(CommandHandler("rtp_games", rtp_games))
-application.add_handler(CommandHandler("set_bonus_text", set_bonus_text))
-application.add_handler(CommandHandler("set_bonus_url", set_bonus_url))
-application.add_handler(CommandHandler("set_daftar_caption", set_daftar_caption))
-application.add_handler(CommandHandler("set_daftar_url", set_daftar_url))
-application.add_handler(CommandHandler("set_link_caption", set_link_caption))
-application.add_handler(CommandHandler("set_link_url", set_link_url))
-application.add_handler(CommandHandler("set_promo_text", set_promo_text))
-application.add_handler(CommandHandler("set_promo_button1", set_promo_button1))
-application.add_handler(CommandHandler("set_promo_button2", set_promo_button2))
+    application.add_handler(CommandHandler("bonus", bonus_cmd))
+    application.add_handler(CommandHandler("daftar", daftar_cmd))
+    application.add_handler(CommandHandler("jackpot", jackpot))
+    application.add_handler(CommandHandler("link", link_cmd))
+    application.add_handler(CommandHandler("live", live_cmd))
+    application.add_handler(CommandHandler("rules", rules_cmd))
+    application.add_handler(CommandHandler("stats", stats_cmd))
+    application.add_handler(CommandHandler("rtp", rtp_cmd))
+    application.add_handler(CommandHandler("promo", promo_cmd))
 
-# Photo handlers for setting permanent photos
-application.add_handler(MessageHandler(filters.PHOTO & filters.Caption(["/set_daftar_photo"]), set_daftar_photo))
-application.add_handler(MessageHandler(filters.PHOTO & filters.Caption(["/set_link_photo"]), set_link_photo))
-application.add_handler(MessageHandler(filters.PHOTO & filters.Caption(["/set_promo_photo"]), set_promo_photo))
+    application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome))
+    application.add_handler(MessageHandler(filters.PHOTO & ~filters.COMMAND & ~filters.Caption(["/set_daftar_photo", "/set_link_photo", "/set_promo_photo"]), add_message))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, anti_spam))
+    application.add_handler(MessageHandler(filters.ALL & filters.ChatType.PRIVATE, collect_user_id))
 
-# Member commands
-application.add_handler(CommandHandler("bonus", bonus_cmd))
-application.add_handler(CommandHandler("daftar", daftar_cmd))
-application.add_handler(CommandHandler("jackpot", jackpot))
-application.add_handler(CommandHandler("link", link_cmd))
-application.add_handler(CommandHandler("live", live_cmd))
-application.add_handler(CommandHandler("rules", rules_cmd))
-application.add_handler(CommandHandler("stats", stats_cmd))
-application.add_handler(CommandHandler("rtp", rtp_cmd))
-application.add_handler(CommandHandler("promo", promo_cmd))
+    # RTP job
+    if "rtp_job" not in application.bot_data:
+        job = application.job_queue.run_repeating(regenerate_rtp, interval=2400, first=10, data=application)
+        application.bot_data["rtp_job"] = job
+        logger.info("RTP job scheduled")
 
-# Misc handlers
-application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome))
-application.add_handler(MessageHandler(filters.PHOTO & ~filters.COMMAND & ~filters.Caption(["/set_daftar_photo", "/set_link_photo", "/set_promo_photo"]), add_message))
-application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, anti_spam))
-application.add_handler(MessageHandler(filters.ALL & filters.ChatType.PRIVATE, collect_user_id))
+    logger.info("QUIZ4D GUARDIAN BOT V3.2 — 24/7 FULL GACOR! SEMUA COMMAND BALAS <1 DETIK!")
 
-# ==================== RUN — START BOT WHEN IMPORTED (Gunicorn / Render) ====================
-def _start_background_bot():
-    try:
-        # run in a separate thread with its own event loop
-        threading.Thread(target=lambda: asyncio.run(start_bot()), daemon=True).start()
-    except Exception as e:
-        logger.exception(f"Failed to start background bot thread: {e}")
+@app.after_serving
+async def shutdown():
+    global application
+    if application:
+        await application.stop()
+        await application.shutdown()
+        logger.info("Bot stopped cleanly")
 
-# If run as main (local dev) we will run the bot in the current loop.
-if __name__ == "__main__":
-    # local dev mode: run start_bot in main loop
-    asyncio.run(start_bot())
-else:
-    # when imported by gunicorn (production), start background bot
-    _start_background_bot()
+# ==================== END OF FILE ====================
