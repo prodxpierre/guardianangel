@@ -1,11 +1,13 @@
-# app.py — QUIZ4D GUARDIAN BOT V3.2 FINAL RENDER 100% STABLE (Desember 2025)
-# Fix total: Flask async + @before_serving → zero error webhook & initialize
+# app.py — QUIZ4D GUARDIAN BOT V3.3 RENDER 100% STABLE WSGI FIX (Desember 2025)
+# Fix total: Sync webhook + background thread → no more before_serving error, zero crash di Gunicorn/Render
 
 import os
 import random
 import logging
 import asyncio
-from flask import Flask, request
+import threading
+import importlib.util
+from flask import Flask, request, jsonify
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import (
@@ -34,7 +36,9 @@ WEBHOOK_URL = f"https://{RENDER_HOST}/webhook" if RENDER_HOST else None
 
 # ==================== FLASK APP ====================
 app = Flask(__name__)
-application: Application | None = None  # akan diisi saat startup
+
+# Global PTB Application (akan diisi saat startup)
+application: Application | None = None
 
 # ==================== DYNAMIC OWNER SYSTEM ====================
 OWNER_FILE = "owners.txt"
@@ -490,102 +494,130 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Error: {context.error}")
 
-# ==================== FLASK ROUTES ====================
+# ==================== FLASK ROUTES (SYNC VERSION UNTUK GUNICORN) ====================
 @app.route("/")
 def home():
-    return "<h1>Quiz4D Guardian Bot V3.2</h1><p>24/7 GACOR DI RENDER — FINAL FIX</p>", 200
+    return "<h1>Quiz4D Guardian Bot V3.3</h1><p>24/7 GACOR DI RENDER — WSGI FIX</p>", 200
+
+@app.route("/ping")
+def ping():
+    return "Quiz4D Guardian Bot V3.3 — Hidup 24/7 bro!", 200
 
 @app.route("/webhook", methods=["POST"])
-async def webhook():
+def webhook():
+    if request.method == "POST":
+        try:
+            json_data = request.get_json(force=True)
+            if json_data is None:
+                return "invalid json", 400
+            update = Update.de_json(json_data, application.bot)
+            if update:
+                # Jalankan async di event loop yang ada (non-blocking)
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # Kalau loop sudah running (dari thread), pakai create_task
+                    asyncio.create_task(application.process_update(update))
+                else:
+                    # Kalau belum, run until complete
+                    loop.run_until_complete(application.process_update(update))
+            return "ok", 200
+        except Exception as e:
+            logger.error(f"Webhook error: {e}")
+            return "error", 500
+    return "bot hidup", 200
+
+# ==================== START BOT FUNCTION (BACKGROUND THREAD) ====================
+async def start_bot():
+    global application
     try:
-        update = Update.de_json(request.get_json(force=True), application.bot)
-        if update:
-            await application.process_update(update)
-        return "ok", 200
-    except Exception as e:
-        logger.error(f"Webhook error: {e}")
-        return "error", 500
+        logger.info("Memulai inisialisasi bot...")
+        application = ApplicationBuilder().token(TOKEN).concurrent_updates(True).build()
 
-# ==================== STARTUP & SHUTDOWN ====================
-@app.before_serving
-async def startup():
-    global application
-    logger.info("Starting Quiz4D Guardian Bot...")
-    application = ApplicationBuilder().token(TOKEN).concurrent_updates(True).build()
+        await application.initialize()
+        init(application)
 
-    await application.initialize()
-    init(application)
-
-    if WEBHOOK_URL:
-        info = await application.bot.get_webhook_info()
-        if info.url != WEBHOOK_URL:
-            await application.bot.set_webhook(url=WEBHOOK_URL)
-            logger.info(f"Webhook set: {WEBHOOK_URL}")
+        # Set webhook
+        if WEBHOOK_URL:
+            info = await application.bot.get_webhook_info()
+            if info.url != WEBHOOK_URL:
+                await application.bot.set_webhook(url=WEBHOOK_URL)
+                logger.info(f"Webhook diset: {WEBHOOK_URL}")
+            else:
+                logger.info("Webhook sudah benar")
         else:
-            logger.info("Webhook already correct")
-    else:
-        logger.warning("No RENDER_EXTERNAL_HOSTNAME → webhook not set")
+            logger.warning("RENDER_EXTERNAL_HOSTNAME tidak ada → webhook tidak diset")
 
-    await application.start()
-    application.add_error_handler(error_handler)
+        await application.start()
+        application.add_error_handler(error_handler)
 
-    # Register semua handler
-    application.add_handler(CommandHandler("addowner", add_owner))
-    application.add_handler(CommandHandler("removeowner", remove_owner))
-    application.add_handler(CommandHandler("listowner", list_owner))
-    application.add_handler(CommandHandler("start_bot", start_bot_cmd))
-    application.add_handler(CommandHandler("stop_bot", stop_bot_cmd))
-    application.add_handler(CommandHandler("add_message", add_message))
-    application.add_handler(CommandHandler("set_interval", set_interval))
-    application.add_handler(CommandHandler("set_welcome", set_welcome))
-    application.add_handler(CommandHandler("broadcast", broadcast_cmd))
-    application.add_handler(CommandHandler("help", help_cmd))
-    application.add_handler(CommandHandler("add_rtp_game", add_rtp_game))
-    application.add_handler(CommandHandler("remove_rtp_game", remove_rtp_game))
-    application.add_handler(CommandHandler("rtp_games", rtp_games))
-    application.add_handler(CommandHandler("set_bonus_text", set_bonus_text))
-    application.add_handler(CommandHandler("set_bonus_url", set_bonus_url))
-    application.add_handler(CommandHandler("set_daftar_caption", set_daftar_caption))
-    application.add_handler(CommandHandler("set_daftar_url", set_daftar_url))
-    application.add_handler(CommandHandler("set_link_caption", set_link_caption))
-    application.add_handler(CommandHandler("set_link_url", set_link_url))
-    application.add_handler(CommandHandler("set_promo_text", set_promo_text))
-    application.add_handler(CommandHandler("set_promo_button1", set_promo_button1))
-    application.add_handler(CommandHandler("set_promo_button2", set_promo_button2))
+        # Register semua handler
+        application.add_handler(CommandHandler("addowner", add_owner))
+        application.add_handler(CommandHandler("removeowner", remove_owner))
+        application.add_handler(CommandHandler("listowner", list_owner))
+        application.add_handler(CommandHandler("start_bot", start_bot_cmd))
+        application.add_handler(CommandHandler("stop_bot", stop_bot_cmd))
+        application.add_handler(CommandHandler("add_message", add_message))
+        application.add_handler(CommandHandler("set_interval", set_interval))
+        application.add_handler(CommandHandler("set_welcome", set_welcome))
+        application.add_handler(CommandHandler("broadcast", broadcast_cmd))
+        application.add_handler(CommandHandler("help", help_cmd))
+        application.add_handler(CommandHandler("add_rtp_game", add_rtp_game))
+        application.add_handler(CommandHandler("remove_rtp_game", remove_rtp_game))
+        application.add_handler(CommandHandler("rtp_games", rtp_games))
+        application.add_handler(CommandHandler("set_bonus_text", set_bonus_text))
+        application.add_handler(CommandHandler("set_bonus_url", set_bonus_url))
+        application.add_handler(CommandHandler("set_daftar_caption", set_daftar_caption))
+        application.add_handler(CommandHandler("set_daftar_url", set_daftar_url))
+        application.add_handler(CommandHandler("set_link_caption", set_link_caption))
+        application.add_handler(CommandHandler("set_link_url", set_link_url))
+        application.add_handler(CommandHandler("set_promo_text", set_promo_text))
+        application.add_handler(CommandHandler("set_promo_button1", set_promo_button1))
+        application.add_handler(CommandHandler("set_promo_button2", set_promo_button2))
 
-    application.add_handler(MessageHandler(filters.PHOTO & filters.Caption(["/set_daftar_photo"]), set_daftar_photo))
-    application.add_handler(MessageHandler(filters.PHOTO & filters.Caption(["/set_link_photo"]), set_link_photo))
-    application.add_handler(MessageHandler(filters.PHOTO & filters.Caption(["/set_promo_photo"]), set_promo_photo))
+        application.add_handler(MessageHandler(filters.PHOTO & filters.Caption(["/set_daftar_photo"]), set_daftar_photo))
+        application.add_handler(MessageHandler(filters.PHOTO & filters.Caption(["/set_link_photo"]), set_link_photo))
+        application.add_handler(MessageHandler(filters.PHOTO & filters.Caption(["/set_promo_photo"]), set_promo_photo))
 
-    application.add_handler(CommandHandler("bonus", bonus_cmd))
-    application.add_handler(CommandHandler("daftar", daftar_cmd))
-    application.add_handler(CommandHandler("jackpot", jackpot))
-    application.add_handler(CommandHandler("link", link_cmd))
-    application.add_handler(CommandHandler("live", live_cmd))
-    application.add_handler(CommandHandler("rules", rules_cmd))
-    application.add_handler(CommandHandler("stats", stats_cmd))
-    application.add_handler(CommandHandler("rtp", rtp_cmd))
-    application.add_handler(CommandHandler("promo", promo_cmd))
+        application.add_handler(CommandHandler("bonus", bonus_cmd))
+        application.add_handler(CommandHandler("daftar", daftar_cmd))
+        application.add_handler(CommandHandler("jackpot", jackpot))
+        application.add_handler(CommandHandler("link", link_cmd))
+        application.add_handler(CommandHandler("live", live_cmd))
+        application.add_handler(CommandHandler("rules", rules_cmd))
+        application.add_handler(CommandHandler("stats", stats_cmd))
+        application.add_handler(CommandHandler("rtp", rtp_cmd))
+        application.add_handler(CommandHandler("promo", promo_cmd))
 
-    application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome))
-    application.add_handler(MessageHandler(filters.PHOTO & ~filters.COMMAND & ~filters.Caption(["/set_daftar_photo", "/set_link_photo", "/set_promo_photo"]), add_message))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, anti_spam))
-    application.add_handler(MessageHandler(filters.ALL & filters.ChatType.PRIVATE, collect_user_id))
+        application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome))
+        application.add_handler(MessageHandler(filters.PHOTO & ~filters.COMMAND & ~filters.Caption(["/set_daftar_photo", "/set_link_photo", "/set_promo_photo"]), add_message))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, anti_spam))
+        application.add_handler(MessageHandler(filters.ALL & filters.ChatType.PRIVATE, collect_user_id))
 
-    # RTP job
-    if "rtp_job" not in application.bot_data:
-        job = application.job_queue.run_repeating(regenerate_rtp, interval=2400, first=10, data=application)
-        application.bot_data["rtp_job"] = job
-        logger.info("RTP job scheduled")
+        # RTP job
+        if "rtp_job" not in application.bot_data:
+            job = application.job_queue.run_repeating(regenerate_rtp, interval=2400, first=10, data=application)
+            application.bot_data["rtp_job"] = job
+            logger.info("RTP job terjadwalkan")
 
-    logger.info("QUIZ4D GUARDIAN BOT V3.2 — 24/7 FULL GACOR! SEMUA COMMAND BALAS <1 DETIK!")
+        logger.info("QUIZ4D GUARDIAN BOT V3.3 — 24/7 FULL GACOR! SEMUA COMMAND BALAS <1 DETIK!")
 
-@app.after_serving
-async def shutdown():
-    global application
-    if application:
-        await application.stop()
-        await application.shutdown()
-        logger.info("Bot stopped cleanly")
+        # Keep alive
+        await asyncio.Event().wait()
+    except Exception as e:
+        logger.error(f"start_bot error: {e}")
 
-# ==================== END OF FILE ====================
+def run_bot_background():
+    try:
+        asyncio.run(start_bot())
+    except Exception as e:
+        logger.error(f"Background bot error: {e}")
+
+# ==================== START BACKGROUND BOT ON IMPORT (GUNICORN/RENDER) ====================
+# Jalankan bot di background thread saat module di-import (oleh Gunicorn)
+if __name__ == "__main__":
+    # Local dev: run Flask langsung
+    threading.Thread(target=run_bot_background, daemon=True).start()
+    app.run(debug=True, host="0.0.0.0", port=5000)
+else:
+    # Production (Gunicorn): start background bot
+    threading.Thread(target=run_bot_background, daemon=True).start()
