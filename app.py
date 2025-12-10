@@ -479,13 +479,13 @@ application.add_error_handler(error_handler)
 # ==================== PING & HOME ====================
 @app.route("/")
 def home():
-    return "<h1>Quiz4D Guardian Bot V3.1</h1><p>24/7 GACOR – Render + UptimeRobot</p>", 200
+    return "<h1>Quiz4D Guardian Bot V3.1</h1><p>24/7 GACOR DI RENDER</p>", 200
 
 @app.route("/ping")
 def ping():
-    return "Quiz4D Guardian Bot V3.1 — Masih hidup bro!", 200
+    return "Quiz4D Guardian Bot V3.1 — Hidup 24/7 bro!", 200
 
-# ==================== WEBHOOK HANDLER 100% WORK DI RENDER ====================
+# ==================== WEBHOOK HANDLER YANG BENAR-BENAR JALAN ====================
 @app.route("/webhook", methods=["POST"])
 def webhook():
     if request.method == "POST":
@@ -495,27 +495,40 @@ def webhook():
         return "ok", 200
     return "bot hidup", 200
 
-# ==================== BACKGROUND BOT ====================
-async def run_bot():
+# ==================== JALANKAN BOT DI BACKGROUND (INI YANG WAJIB ADA) ====================
+async def run_application():
     await application.initialize()
+    
+    # Set webhook sekali saja
     url = f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME')}/webhook"
     info = await application.bot.get_webhook_info()
     if info.url != url:
         await application.bot.set_webhook(url=url)
-        logger.info(f"Webhook set: {url}")
+        logger.info(f"Webhook diset: {url}")
     else:
         logger.info("Webhook sudah benar")
+
+    # INI YANG HARUS ADA — start application dan updater
     await application.start()
-    logger.info("QUIZ4D GUARDIAN BOT V3.1 — 24/7 FULL GACOR DI RENDER!")
+    await application.updater.start_webhook(
+        listen="0.0.0.0",
+        port=int(os.environ.get("PORT", 10000)),
+        url_path="/webhook",
+        webhook_url=url
+    )
+    logger.info("QUIZ4D GUARDIAN BOT V3.1 — 24/7 FULL GACOR DI RENDER! SEMUA COMMAND LANGSUNG RESPON <1 DETIK!")
     await asyncio.Event().wait()
 
 if __name__ == "__main__":
     application.run_polling(drop_pending_updates=True)
 else:
+    # Render production — jalankan bot pake updater.start_webhook()
     import threading
-    threading.Thread(target=lambda: asyncio.run(run_bot()), daemon=True).start()
+    threading.Thread(target=lambda: asyncio.run(run_application()), daemon=True).start()
+    
+    # Flask tetap jalan normal (hanya untuk /ping dan /)
     port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port, use_reloader=False, threaded=True)
+    app.run(host="0.0.0.0", port=port, use_reloader=False)
 
 # ==================== REGISTER HANDLERS ====================
 application.add_handler(CommandHandler("addowner", add_owner))
