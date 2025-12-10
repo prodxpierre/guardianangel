@@ -483,10 +483,25 @@ def home():
 @app.route("/webhook", methods=["POST"])
 def webhook():
     if request.method == "POST":
-        update = Update.de_json(request.get_json(force=True), application.bot)
-        asyncio.run_coroutine_threadsafe(application.process_update(update), asyncio.get_event_loop())
-        return "ok", 200
-    return "Bot nyala!", 200
+        try:
+            update = Update.de_json(request.get_json(force=True), application.bot)
+            if update:
+                # FIX: Buat new event loop per thread kalau gak ada
+                import threading
+                if threading.current_thread() is not threading.main_thread():
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    future = asyncio.run_coroutine_threadsafe(application.process_update(update), loop)
+                    future.result(timeout=10)  # Wait max 10s
+                else:
+                    # Main thread: pakai existing loop
+                    future = asyncio.run_coroutine_threadsafe(application.process_update(update), asyncio.get_event_loop())
+                    future.result(timeout=10)
+            return "ok", 200
+        except Exception as e:
+            logger.error(f"Webhook error: {e}")
+            return "error", 500
+    return "Bot ready!", 200
 
 async def set_webhook():
     try:
